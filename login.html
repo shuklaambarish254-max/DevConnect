@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Login - DevConnect</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="center">
+    <div class="card auth-card">
+      <h2>Login</h2>
+      <input id="email" placeholder="Email or Username" />
+      <input id="password" type="password" placeholder="Password" />
+      <div class="row">
+        <button id="loginBtn" class="btn primary">Login</button>
+        <a href="register.html" class="btn ghost">Register</a>
+      </div>
+      <div id="err" class="error"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch(API + '/auth/login', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = data.message || data.msg || 'Login failed';
+        document.getElementById('err').innerText = msg;
+        // If backend indicates user not found, send user to registration
+        if (res.status === 404 || /not found|no user|user not found/i.test(msg)) {
+          setTimeout(()=> window.location.href = 'register.html', 800);
+        }
+        return;
+      }
+      // store token and user info locally for client routing
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('name', (data.user && data.user.name) || data.name || '');
+      if (data.user && data.user.id) localStorage.setItem('userId', data.user.id);
+      window.location.href = 'social.html';
+    });
+  </script>
+</body>
+</html>

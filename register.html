@@ -1,0 +1,71 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Register - DevConnect</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="center">
+    <div class="card auth-card">
+      <h2>Register</h2>
+      <input id="name" placeholder="Full name" />
+      <input id="username" placeholder="Username" />
+      <input id="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password (min 6)" />
+      <div class="row">
+        <button id="registerBtn" class="btn primary">Create account</button>
+        <a href="login.html" class="btn ghost">Login</a>
+      </div>
+      <div id="err" class="error"></div>
+    </div>
+  </div>
+
+<script>
+const API = 'http://localhost:5000/api';
+document.getElementById('registerBtn').addEventListener('click', async ()=>{
+  document.getElementById('err').innerText = '';
+  const name = document.getElementById('name').value.trim();
+  const username = document.getElementById('username').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  // Basic client-side validation to save round trips and display clear messages
+  if (!name || !username || !email || !password) {
+    document.getElementById('err').innerText = 'Please fill all fields';
+    return;
+  }
+  if (password.length < 6) {
+    document.getElementById('err').innerText = 'Password must be at least 6 characters';
+    return;
+  }
+  // basic email check
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    document.getElementById('err').innerText = 'Please provide a valid email address';
+    return;
+  }
+
+  try {
+    const res = await fetch(API + '/auth/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, username, email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('err').innerText = data.msg || `Register failed (status ${res.status})`;
+      return;
+    }
+    // store token locally and go to social feed
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('name', (data.user && data.user.name) || '');
+    window.location.href = 'social.html';
+  } catch (err) {
+    document.getElementById('err').innerText = 'Network error — could not reach server. Is backend running?';
+    console.error('Register error:', err);
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Social — DevConnect</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="nav">
+      <div class="brand">
+        <div class="logo">DevConnect</div>
+        <div class="tag">Connect, Code, and Grow Together</div>
+      </div>
+      <div class="nav-actions">
+        <input id="searchInput" class="search" placeholder="Search users..." />
+        <span id="username" class="muted"></span>
+        <button id="messagesBtn" class="btn ghost">✉️ <span id="msgCount"></span></button>
+        <button id="profileBtn" class="btn ghost">Profile</button>
+        <button id="logoutBtn" class="btn ghost">Logout</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="left">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>Welcome</h3>
+            <button id="notificationBtn" class="btn ghost" style="font-size:20px;position:relative;">🔔 <span id="notifCount" style="position:absolute;top:-5px;right:-5px;background:red;color:white;
+            border-radius:50%;width:20px;height:20px;font-size:12px;display:none;justify-content:center;align-items:center;line-height:20px;"></span></button>
+          </div>
+          <p id="userWelcome">Guest</p>
+        </div>
+        
+        <!-- Notifications Panel -->
+        <div id="notificationsPanel" class="card" style="display:none;max-height:400px;overflow-y:auto;margin-top:12px;">
+          <h4>Notifications</h4>
+          <div id="notificationsList" style="max-height:350px;overflow-y:auto;">
+            <p class="muted">No notifications</p>
+          </div>
+          <button id="clearNotifBtn" class="btn ghost" style="width:100%;margin-top:8px;font-size:12px;">Clear All</button>
+        </div>
+      </aside>
+
+      <section class="feed">
+        <div class="card new-post">
+          <h3>Share an update</h3>
+          <textarea id="postContent" placeholder="What's on your mind?"></textarea>
+            <div class="file-input-wrapper"><input type="file" id="postFile" accept="image/*,video/*" /></div>
+            <div class="post-actions"><button id="postBtn" class="btn primary">Post</button></div>
+        </div>
+
+        <div class="feed-controls">
+          <button id="allFeedBtn" class="btn ghost">All</button>
+          <button id="followingFeedBtn" class="btn ghost">Following</button>
+          <button id="myPostsBtn" class="btn ghost">My Posts</button>
+        </div>
+
+        <div id="posts"></div>
+      </section>
+
+      <aside class="right">
+        <div class="card">
+          <h4>Search Results</h4>
+          <div id="searchResults"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./script.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const name = localStorage.getItem('name') || 'Guest';
+      const usernameEl = document.getElementById('username');
+      if (usernameEl) usernameEl.textContent = `Hi, ${name}`;
+
+      const profileBtn = document.getElementById('profileBtn');
+      if (profileBtn) profileBtn.addEventListener('click', ()=>{
+        const uid = localStorage.getItem('userId');
+        if (uid) window.location.href = 'profile.html?u=' + uid; else window.location.href = 'profile.html';
+      });
+      const searchInput = document.getElementById('searchInput');
+      const searchResults = document.getElementById('searchResults');
+      if (searchInput && searchResults) {
+        let t = null;
+        searchInput.addEventListener('input', ()=>{
+          clearTimeout(t);
+          t = setTimeout(()=> searchUsers(searchInput.value, searchResults), 300);
+        });
+      }
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', ()=>{
+        localStorage.removeItem('token'); localStorage.removeItem('name'); window.location.href='index.html';
+      });
+    });
+  </script>
+</body>
+</html>

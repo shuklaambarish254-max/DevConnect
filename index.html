@@ -1,0 +1,29 @@
+ <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>DevConnect — Connect, Code, and Grow Together</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="center">
+    <div class="card">
+      <h1>Welcome to DevConnect</h1>
+      <p class="muted">Login to see the community feed or register for a new account.</p>
+      <div class="row button-container">
+        <a href="login.html" class="btn primary">Login</a>
+        <a href="register.html" class="btn ghost">Register</a>
+        <a href="profile.html" class="btn profile">Profile</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // First page should show the splash screen
+    document.addEventListener('DOMContentLoaded', ()=>{
+      window.location.href = 'splash.html';
+    });
+  </script>
+</body>
+</html>

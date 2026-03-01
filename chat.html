@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chat - DevConnect</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="nav">
+      <div class="brand"><div class="logo">DevConnect</div></div>
+      <div class="nav-actions">
+        <button id="backBtn" class="btn ghost">← Back</button>
+      </div>
+    </header>
+
+    <main class="main single">
+      <section class="chat-wrapper" style="width:80%;margin:0 auto;display:flex;gap:12px;align-items:stretch;">
+        <!-- Conversations (left card, 40%) -->
+        <aside id="conversationsPanel" class="card" style="width:100%;overflow:auto;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3 style="margin:0">Messages</h3>
+          </div>
+          <div id="convList" class="conv-list">Loading...</div>
+        </aside>
+      </section>
+
+      <!-- Chat area moved outside the centered wrapper and fixed to the right -->
+      <div id="chatPanel" class="card chat-panel-outside" style="position:fixed;right:15vw;top:110px;width:55vw;display:flex;flex-direction:column;min-height:580px;max-height:calc(100vh - 140px);overflow:hidden;padding:0;">
+        <div class="chat-header-section" style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.04);">
+          <div class="chat-header-content">
+            <div class="chat-user-info">
+              <h2 id="chatWith" class="chat-title"></h2>
+            </div>
+          </div>
+        </div>
+
+        <div id="messagesList" class="messages-container" style="flex:1;overflow:auto;padding:12px;background:transparent;"></div>
+
+        <div class="chat-input-section" style="border-top:1px solid rgba(0,0,0,0.04);padding:8px;">
+          <div class="input-wrapper" style="display:flex;gap:8px;align-items:flex-end;">
+            <textarea id="msgInput" class="message-input" placeholder="Type your message here..." rows="1" style="flex:1"></textarea>
+            <button id="sendMsg" class="btn-send"> <span class="send-icon">➤</span></button>
+          </div>
+          <p class="char-count" style="margin:6px 0 0;"> <span id="charCount">0</span>/500</p>
+        </div>
+      </div>
+    </main>
+
+  </div>
+      <script src="script.js"></script>
+      <script>
+        // Back button with fallback
+        document.getElementById('backBtn').addEventListener('click', () => {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.location.href = 'social.html';
+          }
+        });
+        const params = new URLSearchParams(window.location.search);
+        let currentOther = params.get('u');
+        let pollIntervalId = null;
+
+        // If no user specified, show conversation list instead of an alert
+        async function loadConversationsPage() {
+          const convContainer = document.getElementById('convList');
+          if (!convContainer) return;
+          convContainer.style.minHeight = '80px';
+          convContainer.innerHTML = 'Loading...';
+          const token = localStorage.getItem('token');
+          if (!token) { 
+            // show hint instead of redirecting so the left pane remains visible
+            document.getElementById('chatWith').textContent = 'Messages';
+            const inputSection = document.querySelector('.chat-input-section'); if (inputSection) inputSection.style.display = 'none';
+            convContainer.innerHTML = '<p class="muted">Log in to view conversations</p>';
+            return; 
+          }
+          document.getElementById('chatWith').textContent = 'Messages';
+          // ensure chat input hidden when showing conversation-only view
+          const inputSection = document.querySelector('.chat-input-section'); if (inputSection) inputSection.style.display = 'none';
+          convContainer.innerHTML = 'Loading...';
+          try {
+            const res = await fetch(`${API}/messages/conversations`, { headers: authHeaders() });
+            if (!res.ok) { convContainer.innerHTML = '<p class="muted">Failed to load conversations</p>'; return; }
+            const conv = await res.json();
+            if (!Array.isArray(conv) || conv.length === 0) { convContainer.innerHTML = '<p class="muted">No conversations</p>'; return; }
+            // Resolve items safely; if per-user fetch fails, fall back to id
+            const items = [];
+            for (const c of conv) {
+              try {
+                const r = await fetch(`${API}/users/${encodeURIComponent(c.userId)}`, { headers: authHeaders() });
+                let name = c.userId;
+                if (r && r.ok) {
+                  const d = await r.json().catch(()=>null);
+                  name = (d && ((d.user && d.user.name) || d.name || d.username)) || c.userId;
+                }
+                items.push({ userId: c.userId, name, last: c.last || '', unread: c.unread || 0 });
+              } catch (e) {
+                console.error('Conv user fetch failed for', c.userId, e);
+                items.push({ userId: c.userId, name: c.userId, last: c.last || '', unread: c.unread || 0 });
+              }
+            }
+
+            if (!items || items.length === 0) {
+              convContainer.innerHTML = '<p class="muted">No conversations</p>';
+            } else {
+              convContainer.innerHTML = items.map(it => `
+                <div class="conv-item" data-id="${it.userId}" style="padding:12px;border-bottom:1px solid rgba(0,0,0,0.05);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div><strong>${escapeHtml(it.name)}</strong></div>
+                    <div class="muted" style="font-size:0.9rem">${escapeHtml(it.last || '')}</div>
+                  </div>
+                  ${it.unread ? `<div class="muted">(${it.unread})</div>` : ''}
+                </div>
+              `).join('');
+              convContainer.querySelectorAll('.conv-item').forEach(el => el.addEventListener('click', ()=>{ openConversation(el.dataset.id); }));
+            }
+          } catch (e) { console.error(e); convContainer.innerHTML = '<p class="muted">Failed to load conversations</p>'; }
+        }
+
+        // Open a conversation inside the right panel without page navigation
+        function openConversation(id, pushState = true) {
+          if (!id) return;
+          currentOther = id;
+          // show input
+          const inputSection = document.querySelector('.chat-input-section'); if (inputSection) inputSection.style.display = '';
+          // highlight active conv
+          document.querySelectorAll('#convList .conv-item').forEach(el => el.classList.remove('active'));
+          const activeEl = document.querySelector(`#convList .conv-item[data-id="${id}"]`);
+          if (activeEl) activeEl.classList.add('active');
+          // load header and messages
+          loadUserInfo();
+          load();
+          // start polling for messages
+          if (pollIntervalId) clearInterval(pollIntervalId);
+          pollIntervalId = setInterval(load, 2000);
+          if (pushState) history.replaceState(null, '', '?u=' + encodeURIComponent(id));
+        }
+
+        // Auto-resize textarea
+        const msgInput = document.getElementById('msgInput');
+        msgInput.addEventListener('input', function() {
+          this.style.height = 'auto';
+          this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+          document.getElementById('charCount').textContent = this.value.length;
+        });
+
+        // Handle Enter to send (Shift+Enter for new line)
+        msgInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            document.getElementById('sendMsg').click();
+          }
+        });
+
+        // Load user info
+        async function loadUserInfo() {
+          try {
+            const res = await fetch(`${API}/users/${currentOther}`, { headers: authHeaders() });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.user && data.user.name) {
+                document.getElementById('chatWith').textContent = data.user.name;
+              } else {
+                document.getElementById('chatWith').textContent = currentOther;
+              }
+              
+
+            } else {
+              document.getElementById('chatWith').textContent = currentOther;
+            }
+          } catch (e) {
+            console.error('Failed to load user info:', e);
+            document.getElementById('chatWith').textContent = currentOther;
+          }
+        }
+
+        let lastLoadTime = 0;
+    
+        async function load() {
+          const token = localStorage.getItem('token'); 
+          if (!token) return alert('Please log in');
+          const userId = localStorage.getItem('userId');
+      
+          try {
+            console.log('Loading messages from', currentOther);
+            const res = await fetch(`${API}/messages/${currentOther}`, { 
+              headers: authHeaders(),
+              method: 'GET'
+            });
+        
+            console.log('Load response status:', res.status);
+        
+            if (!res.ok) {
+              const errText = await res.text();
+              console.error('Load failed:', res.status, errText);
+              return;
+            }
+        
+            const msgs = await res.json();
+            console.log('Loaded messages:', msgs);
+            const list = document.getElementById('messagesList');
+        
+            if (!Array.isArray(msgs)) {
+              console.error('Invalid response:', msgs);
+              list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">No messages yet</div>';
+              return;
+            }
+        
+            list.innerHTML = msgs.map(m => {
+              const isOwn = m.from === userId;
+              const time = new Date(m.createdAt);
+              const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          
+              return `<div class="message-group ${isOwn ? 'own' : 'other'}">
+                <div class="message-bubble">
+                  <div class="message-text">${escapeHtml(m.text)}</div>
+                  <div class="message-time">${timeStr}</div>
+                </div>
+              </div>`;
+            }).join('');
+        
+            // scroll to bottom
+            setTimeout(() => {
+              list.scrollTop = list.scrollHeight;
+            }, 50);
+        
+            lastLoadTime = Date.now();
+          } catch (e) {
+            console.error('Load error:', e);
+          }
+        }
+
+        // Load initial data
+        // Always populate the conversations panel on left
+        loadConversationsPage();
+
+        // If URL contains a conversation, open it in-place
+        if (currentOther) {
+          openConversation(currentOther, false);
+        }
+
+        document.getElementById('sendMsg').addEventListener('click', async ()=>{
+          const text = msgInput.value.trim(); 
+          if (!text) return;
+
+          const sendBtn = document.getElementById('sendMsg');
+          const originalContent = sendBtn.innerHTML;
+          sendBtn.disabled = true;
+          sendBtn.innerHTML = '...';
+
+          try {
+            const userId = localStorage.getItem('userId');
+            console.log('Sending message:', { from: userId, to: currentOther, text });
+
+            const payload = { to: currentOther, text };
+            console.log('Payload:', payload);
+        
+            const res = await fetch(`${API}/messages`, { 
+              method: 'POST', 
+              headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), 
+              body: JSON.stringify(payload)
+            });
+
+            // Align chat container horizontally between header brand and nav-actions (back button)
+            function alignChatToHeader() {
+              try {
+                const nav = document.querySelector('.nav');
+                const brand = nav.querySelector('.brand');
+                const actions = nav.querySelector('.nav-actions');
+                const chatSection = document.querySelector('.chat-container');
+                const app = document.querySelector('.app');
+                if (!nav || !brand || !actions || !chatSection || !app) return;
+                const appRect = app.getBoundingClientRect();
+                const brandRect = brand.getBoundingClientRect();
+                const actionsRect = actions.getBoundingClientRect();
+                // compute left offset and width in relation to the .app container
+                const leftOffset = Math.max(0, brandRect.right - appRect.left);
+                const width = Math.max(200, actionsRect.left - brandRect.right);
+                chatSection.style.marginLeft = leftOffset + 'px';
+                chatSection.style.width = width + 'px';
+              } catch (e) { console.error('alignChatToHeader failed', e); }
+            }
+
+            // initial align and on resize
+            setTimeout(alignChatToHeader, 50);
+            window.addEventListener('resize', () => setTimeout(alignChatToHeader, 50));
+        
+            const j = await res.json().catch(()=>({}));
+            console.log('Response status:', res.status, 'Body:', j);
+        
+            if (!res.ok) {
+              console.error('Send failed with status:', res.status, j);
+              alert(j.message || 'Send failed: ' + res.status);
+              sendBtn.disabled = false;
+              sendBtn.innerHTML = originalContent;
+              return;
+            }
+        
+            console.log('Message sent successfully:', j);
+            document.getElementById('msgInput').value = '';
+            msgInput.style.height = 'auto';
+            document.getElementById('charCount').textContent = '0';
+        
+            // reload conversation and scroll to bottom
+            await load();
+        
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = originalContent;
+          } catch (e) { 
+            console.error('Send error:', e); 
+            alert('Send failed: ' + e.message);
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = originalContent;
+          }
+          });
+        // Load initial data
+        // Always populate the conversations panel on left
+        loadConversationsPage();
+
+        // If URL contains a conversation, open it in-place
+        if (currentOther) {
+          openConversation(currentOther, false);
+        }
+      </script> 
+    </body>
+</html>
